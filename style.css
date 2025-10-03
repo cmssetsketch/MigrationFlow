@@ -1,0 +1,195 @@
+/* Reset */
+/* * { box-sizing: border-box; margin: 0; padding: 0; }*/
+html, body { margin: 0;
+  padding: 0;
+  background: #000;   /* fallback background for scrolling */
+  color: white; font-family: 'Arial', sans-serif }
+
+/* Main layout */
+#mainLayout {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100vh; /* full viewport */
+  background: #000;
+}
+
+#origineContainer {
+  flex: 1 1 auto;    /* flexible */
+  background: #000000;
+  color: white;
+  padding: 1rem;
+  min-height: unset;
+  height: auto;
+  margin-bottom:20px;
+}
+
+#origineBars {
+  width: 100%;
+  height: auto;/*container adapts to content */
+  background: #000; /* your background */
+}
+
+#globalContainer {
+  flex: 0 0 auto;/* don’t stretch */
+  width: 100%;
+  max-width: 500px;/* never wider than 500px */
+  background: #000;
+  color: white;
+  padding: 1rem;
+  margin: 0 auto;    /* center horizontally */
+  height: auto; 
+}
+
+#titleText {
+  text-align: center;
+  font-size: 20px;
+  margin: 10px 0 0px;
+  font-weight: bold;
+  color: white; /* base text always white */
+}
+
+#titleText .title-dynamic {
+  color: white; /* gets updated dynamically */
+}
+
+#buttonLayer {
+  width: 90%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+#countryButtons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;  /* center columns under canvas */
+  align-items: flex-start;
+  margin: 0;
+  padding: 0;
+}
+#countryButtons > div {  /* column containers */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0 0px;/* space between columns */
+}
+#countryButtons .country-btn {  /* individual country */
+  cursor: pointer;
+  font-size: 13px;
+  max-width: 140px;
+  line-height: 12px;     /* single line spacing */
+  text-align: left;
+}
+
+#sliderWrapper #yearSliderContainer {
+  display: flex;  /* horizontal row */
+  flex-direction: row;/* play button + slider side by side */
+  align-items: center; /* vertical center */
+  gap: 10px; /* spacing between play and slider */
+  width: 90%;                /* responsive width */
+  max-width: 400px;          /* optional max width */
+  margin-bottom: 5px;        /* space to year display below */
+}
+
+#sliderWrapper #yearSliderContainer button {
+  cursor: pointer;
+  flex: 0 0 auto;            /* don't stretch */
+  padding: 5px 10px;
+  font-size: 14px;
+}
+
+#sliderWrapper #yearSliderContainer input[type="range"] {
+  flex: 1 1 auto;            /* take remaining space next to play button */
+}
+
+.year-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 200px;
+  height: 6px;
+  background: #444;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+.year-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;  
+  background: white;
+  cursor: pointer;
+}
+.year-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  background: white;
+  cursor: pointer;
+}
+
+#globalContainer canvas {
+  display: block;
+  margin: 0 auto;
+}
+
+
+/* Destination: takes all available space on the right */
+#destinationContainer {
+  flex: 1 1 auto;    /* flexible */
+  background: #000000;
+  color: white;
+  padding: 1rem;
+   height: auto;
+  margin-bottom:20px;
+}
+
+#destinationBars {
+  width: 100%;
+  height: auto;/*container adapts to content */
+  background: #000; /* your background */
+}
+
+#sideBySide {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+}
+
+/* Responsive reordering when screen < 768px */
+/* ---------- Mobile (<768px) ---------- */
+@media (max-width: 768px) {
+  #mainLayout {
+    flex-direction: column; /* stack global first */
+  }
+
+  #globalContainer {
+    order: 1;
+    width: 100%;
+    max-width: none;
+    
+  }
+  
+  #buttonLayer {
+    display: block;
+    margin: 20px auto;     /* center horizontally */
+    width: 90%;            /* shrink to fit smaller screens */
+  }
+  
+  #sideBySide {
+    order: 2;
+    display: flex;
+    flex-direction: row; /* row inside column */
+  }
+
+  #origineContainer,
+  #destinationContainer {
+    flex: 1 1 50%;
+    height: auto;
+  }
+}
+
+@media (max-width: 460px) {
+  #buttonLayer {
+    width: 90%;      /* responsive width */
+  }
+}
