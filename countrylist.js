@@ -18,7 +18,7 @@ let countryColors = {
 "British Virgin Islands" , "Cayman Islands","Cuba", "Curaçao",
 "Dominica", "Dominican Republic","Grenada", "Guadeloupe","Haiti", "Jamaica",
 "Martinique", "Montserrat","Puerto Rico", "Saint Kitts and Nevis",
-"Saint Lucia,", "Saint Vincent and the Grenadines","Sint Maarten", "Trinidad and Tobago","Turks and Caicos Islands", "United States Virgin Islands"],
+"Saint Lucia", "Saint Vincent and the Grenadines","Sint Maarten", "Trinidad and Tobago","Turks and Caicos Islands", "United States Virgin Islands"],
         "#25f4f4": ["Nothern Europe","Channel Islands" , "Denmark" , "Estonia","Faroe Islands" , "Finland" ,"Iceland" , "Ireland",
 "Isle of Man", "Latvia" , "Lithuania", "Norway" , "Sweden", "United Kingdom"],
           "#6ddcfc": ["Western Europe","Austria" , "Belgium" , "France" ,"Germany" , "Liechtenstein",
