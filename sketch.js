@@ -13,7 +13,7 @@ let destinationBarsDiv;
 let creditDiv;
 let yearSliderContainer;
 let years = ["1990","2000","2010","2020","2024"];
-let selectedYear = years[6];
+let selectedYear = years[4];
 
 function preload() {
   MigWorld = loadJSON("MigWorld.json");
