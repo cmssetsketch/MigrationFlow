@@ -636,25 +636,6 @@ for (let col in countryColors) {
   return "#cccccc";
 }
 
-/*function getBarSize(value, colWidth, baseHeight = 10) {
-  if (value == null || isNaN(value)) 
-    return { width: colWidth * 0.05, height: baseHeight };
-
-  // Avoid division by zero
-  const range = globalMax - globalMin || 1;
-
-  // Linearly map min → 0.05 and max → 1
-  const normalized = 0.05 + ((value - globalMin) / range) * (1 - 0.05);
-
-  // Clamp to ensure within bounds (just in case)
-  const clamped = Math.max(0.05, Math.min(1, normalized));
-
-  return {
-    width: colWidth * clamped,
-    height: baseHeight
-  };
-}*/
-
 function getBarSize(value, colWidth, baseHeight = 10) {
   if (value == null || isNaN(value)) 
     return { width: colWidth * 0.02, height: baseHeight };
@@ -675,8 +656,6 @@ function getBarSize(value, colWidth, baseHeight = 10) {
     height: baseHeight
   };
 }
-
-
 
 let hoverLabelDiv = null;
 
@@ -759,56 +738,4 @@ function resetHighlight() {
   if (typeof hideHoverLabel === "function") {
     hideHoverLabel();
   }
-}
-
-function exportBarsToSVG(containerId, filename = "export.svg") {
-  const container = document.getElementById(containerId);
-  if (!container) {
-    console.error("Container not found:", containerId);
-    return;
-  }
-
-  // Create SVG namespace
-  const xmlns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(xmlns, "svg");
-
-  // Match container size
-  const width = container.clientWidth;
-  const height = container.clientHeight;
-  svg.setAttribute("xmlns", xmlns);
-  svg.setAttribute("width", width);
-  svg.setAttribute("height", height);
-  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-
-  // For each bar in the container
-  const bars = container.querySelectorAll(".origine-bar, .destination-bar");
-  bars.forEach(bar => {
-    const rect = document.createElementNS(xmlns, "rect");
-    const style = window.getComputedStyle(bar);
-
-    const x = parseFloat(bar.style.left);
-    const y = parseFloat(bar.style.top);
-    const w = parseFloat(bar.style.width);
-    const h = parseFloat(bar.style.height);
-    const fill = style.backgroundColor || "#999";
-
-    rect.setAttribute("x", x);
-    rect.setAttribute("y", y);
-    rect.setAttribute("width", w);
-    rect.setAttribute("height", h);
-    rect.setAttribute("fill", fill);
-    rect.setAttribute("data-country", bar.dataset.country || "");
-    rect.setAttribute("data-value", bar.dataset.value || "");
-
-    svg.appendChild(rect);
-  });
-
-  // Serialize and download
-  const svgBlob = new Blob([svg.outerHTML], { type: "image/svg+xml;charset=utf-8" });
-  const svgUrl = URL.createObjectURL(svgBlob);
-  const link = document.createElement("a");
-  link.href = svgUrl;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(svgUrl);
 }
