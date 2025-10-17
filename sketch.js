@@ -12,8 +12,8 @@ let origineBarsDiv;
 let destinationBarsDiv;
 let creditDiv;
 let yearSliderContainer;
-let years = ["1990","1995","2000","2005","2010","2015","2020","2024"];
-let selectedYear = years[7];
+let years = ["1990","2000","2010","2020","2024"];
+let selectedYear = years[6];
 
 function preload() {
   MigWorld = loadJSON("MigWorld.json");
@@ -25,6 +25,7 @@ function setup() {
 }
 
 function initSketch() {
+  
   const globalDiv = document.getElementById("globalContainer");
   const buttonLayer = document.getElementById("buttonLayer");
 
@@ -65,14 +66,12 @@ buttonCanvas.elt.addEventListener('touchstart', () => {}, {passive: false});
   
   setupBars();
 
-  // --- Buttons setup ---
-  setupButtons();   // your function to create buttons
-  precomputeVertices(); // precompute polygon vertices for continents
-
+  setupButtons(); 
+  precomputeVertices(); 
   drawButtons();
 }
 
-// --- Precompute vertices so contains() works immediately ---
+
 function precomputeVertices() {
   for (let btn of buttons) {
     if (btn.type === "continent" && btn.shapes) {
@@ -153,242 +152,295 @@ function setupBars() {
   destinationDiv.appendChild(destinationBarsDiv);
 }
 
-let sortedByYear = {}; 
-let globalMin = Infinity;
-let globalMax = -Infinity;
+let sortedByYear = {};
+let orMin = Infinity;
+let orMax = -Infinity;
 
 function InitializeData() {
-  let dictPays = MigWorld.Pays[selectedCountry]; // JSON for one country
+  let dictPays = MigWorld.Pays[selectedCountry]; 
   sortedByYear = {}; // reset
+let baselineYear = "2024"; let baselineData = dictPays[baselineYear]; let ranking = []; if (baselineData) { // Keep all countries, even if 0 
+  ranking = Object.entries(baselineData) .sort((a, b) => b[1] - a[1]) // sort descending by 2024 
+    .map(entry => entry[0]); } for (let year of years) { let yearData = dictPays[year]; if (!yearData) continue; // Map according to ranking, keep zeros 
+  let sorted = ranking.map(country => [country, yearData[country] || 0]); sortedByYear[year] = sorted; } // Optional: remove countries that are zero across all years 
+  const keepCountries = ranking.filter(country => years.some(year => (dictPays[year] && dictPays[year][country] > 0)) ); for (let year of years) { sortedByYear[year] = sortedByYear[year].filter(([country, _]) => keepCountries.includes(country)); }
 
-  // --- Step 1: get baseline ranking from 2024 ---
-  let baselineYear = "2024";
-  let baselineData = dictPays[baselineYear];
-
-  let ranking = [];
-  if (baselineData) {
-    ranking = Object.entries(baselineData)
-      .filter(entry => entry[1] !== 0)   // remove 0 values
-      .sort((a, b) => b[1] - a[1])       // sort by value desc
-      .map(entry => entry[0]); 
-  }
-
-  for (let year of years) {
-    let yearData = dictPays[year];
-    if (!yearData) continue;
-
-    // Rebuild in baseline ranking order
-    let sorted = ranking
-      .map(country => [country, yearData[country] || 0]) // ensure consistent order
-      .filter(entry => entry[1] !== 0);// drop 0s if needed
-
-    sortedByYear[year] = sorted;
-  }
-
-  // --- Step 3: compute global min/max ---
-  globalMin = Infinity;
-  globalMax = -Infinity;
+  // --- Step 3: compute min/max for origins ---
+  orMin = Infinity;
+  orMax = -Infinity;
 
   for (let year of years) {
     let entries = sortedByYear[year];
     if (!entries) continue;
-
     for (let [country, value] of entries) {
-      if (value < globalMin) globalMin = value;
-      if (value > globalMax) globalMax = value;
+      if (value < orMin) orMin = value;
+      if (value > orMax) orMax = value;
     }
   }
 }
+
+let destination = {};
+let destMin = Infinity;
+let destMax = -Infinity;
+let globalMin = Infinity, globalMax = -Infinity;
+let globalAvg = 0;
 
 function buildDestinations() {
   if (!selectedCountry) return;
   destination = {};
   const baselineYear = "2024";
-  let yearList2024 = [];
 
+  // --- Step 1: get baseline ranking from 2024 ---
+  const baselineData = [];
   for (let originCountry in MigWorld.Pays) {
     const dictPays = MigWorld.Pays[originCountry];
     if (!dictPays) continue;
     const yearData = dictPays[baselineYear];
     if (!yearData) continue;
-    const dvalue = yearData[selectedCountry];
-    if (dvalue && dvalue>0) yearList2024.push([originCountry,dvalue]);
+    const dvalue = yearData[selectedCountry] || 0;
+    baselineData.push([originCountry, dvalue]);
   }
 
-  yearList2024.sort((a,b)=>b[1]-a[1]);
-  const ranking = yearList2024.map(e=>e[0]);
+  // Sort descending by baseline year
+  baselineData.sort((a, b) => b[1] - a[1]);
+  const ranking = baselineData.map(e => e[0]);
 
+  // --- Step 2: keep only countries that have >0 in any year ---
+  const countriesToKeep = ranking.filter(country => {
+    return years.some(year => {
+      const dictPays = MigWorld.Pays[country];
+      if (!dictPays) return false;
+      const val = dictPays[year]?.[selectedCountry] || 0;
+      return val > 0;
+    });
+  });
+
+  // --- Step 3: build destination per year keeping zeros for each country ---
   for (let year of years) {
     let yearList = [];
     for (let originCountry of ranking) {
+      if (!countriesToKeep.includes(originCountry)) continue;
       const dictPays = MigWorld.Pays[originCountry];
       if (!dictPays) continue;
-      const yearData = dictPays[year];
-      if (!yearData) continue;
-      const dvalue = yearData[selectedCountry]||0;
-      if (dvalue>0) yearList.push([originCountry,dvalue]);
+      const yearData = dictPays[year] || {};
+      const dvalue = yearData[selectedCountry] || 0;
+      yearList.push([originCountry, dvalue]); // keep zeros
     }
     destination[year] = yearList;
   }
+
+  // --- Step 4: compute min/max for destinations ---
+  destMin = Infinity;
+  destMax = -Infinity;
+  for (let year of years) {
+    const entries = destination[year];
+    if (!entries) continue;
+    for (let [_, value] of entries) {
+      if (value < destMin) destMin = value;
+      if (value > destMax) destMax = value;
+    }
+  }
+
+  console.log("Destination min/max:", destMin, destMax);
 }
 
-function drawOrigine(year = "2024") {
 
-  // Basic existence checks
-  if (typeof origineBarsDiv === "undefined" || origineBarsDiv === null) {
-    console.error("drawOrigine: origineBarsDiv is NOT defined (no #origineBars element).");
+function computeGlobalScale() {
+  globalMin = Math.min(orMin, destMin);
+  globalMax = Math.max(orMax, destMax);
+  const allValues = [];
+
+  for (let year in sortedByYear) {
+    for (let [_, v] of sortedByYear[year]) allValues.push(v);
+  }
+  for (let year in destination) {
+    for (let [_, v] of destination[year]) allValues.push(v);
+  }
+
+  // Compute average (mean)
+  if (allValues.length > 0) {
+    const sum = allValues.reduce((a, b) => a + b, 0);
+    globalAvg = sum / allValues.length;
+  } else {
+    globalAvg = (globalMin + globalMax) / 2;
+  }
+}
+
+
+function drawOrigineAll() {
+  if (!origineBarsDiv) {
+    console.error("drawOrigine: origineBarsDiv is NOT defined.");
     return;
   }
 
-  const entries = sortedByYear[selectedYear];
-  if (!entries || !Array.isArray(entries) || entries.length === 0) {
-    console.warn(`drawOrigine: no entries for year "${year}".`, entries);
-    origineBarsDiv.innerHTML = "";
-    return;
-  }
-
-  origineBarsDiv.innerHTML = "";// Clear previous bars
+  origineBarsDiv.innerHTML = ""; // clear old
 
   const containerWidth = origineBarsDiv.clientWidth;
-  const colX = Math.round(containerWidth / 2); // center X
-  let barHeight = 8;
-  let rowHeight = barHeight; // no gap between bars
-const y0 = 0;
-  // Use a fragment to minimize reflows
+  const years = Object.keys(sortedByYear); 
+  const y0 = 20;
+
   const frag = document.createDocumentFragment();
 
-  for (let i = 0; i < entries.length; i++) {
-    const [name, value] = entries[i];
+  years.forEach((year, yearIndex) => {
+    const entries = sortedByYear[year];
+    if (!entries || !Array.isArray(entries)) return;
 
-    let rectW = 0;
-    try {
-      rectW = Math.round(getSizeRect(value, Math.max(50, Math.floor(containerWidth * 1))));
-    } catch (err) {
-      console.error("drawOrigine: error calling getSizeRect()", err);
-      rectW = Math.max(2, Math.round(containerWidth * 0.05));
-    }
+    const colWidth = containerWidth / years.length;
+    const colCenterX = Math.round(yearIndex * colWidth + colWidth / 2);
+    let currentY = y0;
+let baseHeight = 10;
+    // Year label
+    const yearLabel = document.createElement("div");
+    yearLabel.textContent = year;
+    yearLabel.style.position = "absolute";
+    yearLabel.style.top = "0px";
+    yearLabel.style.left = `${colCenterX}px`;
+    yearLabel.style.transform = "translateX(-50%)";
+    yearLabel.style.fontSize = "10px";
+    yearLabel.style.color = "white";
+    frag.appendChild(yearLabel);
 
-    let rawColor = (typeof getCountryColor === "function") ? getCountryColor(name) : null;
-    let cssColor = "#999";
-    if (typeof rawColor === "string") {
-      cssColor = rawColor;
-    } else if (rawColor && rawColor.levels && Array.isArray(rawColor.levels)) {
-      const [r,g,b,a] = rawColor.levels;
-      const alpha = (typeof a === "number") ? (a/255) : 1;
-      cssColor = `rgba(${r},${g},${b},${alpha})`;
-    }
-
-    const bar = document.createElement("div");
-    bar.className = "origine-bar";
-    bar.style.position = "absolute";
-    bar.style.left = `${colX - rectW / 2}px`;
-    bar.style.top = `${y0 + i * rowHeight}px`;
-    bar.style.width = `${rectW}px`;
-    bar.style.height = `${barHeight}px`;
-    bar.style.background = cssColor;
-
-    bar.dataset.country = name;
-    bar.dataset.value = value;
-
-    // Hover show label
-bar.addEventListener("mouseenter", () => showHoverLabel(bar));
-bar.addEventListener("mouseleave", hideHoverLabel);
-
-bar.addEventListener("click", (ev) => {
- if (!this.dataset || !this.dataset.country) return;
-  const countryName = bar.dataset.country;
-  const val = bar.dataset.value;
-  showHoverLabel(`${countryName}\n${val}`, ev.pageX, ev.pageY, bar);
-  setTimeout(() => hideHoverLabel(), 2000);
-});
-
-origineBarsDiv.appendChild(bar);
-
+    entries.forEach(([name, value]) => {
+      if (value === 0) {
+    currentY += baseHeight; // keep space for alignment
+    return;
   }
-const totalHeight = y0 + entries.length * rowHeight;
-  origineBarsDiv.style.height = `${totalHeight}px`;
-  
+const { width, height } = getBarSize(value, colWidth, baseHeight);
+
+
+      const bar = document.createElement("div");
+      bar.className = "origine-bar";
+      bar.style.position = "absolute";
+      bar.style.left = `${colCenterX - width / 2}px`;
+      bar.style.top = `${currentY}px`;
+      bar.style.width = `${width}px`;
+      bar.style.height = `${height}px`;
+
+
+      let rawColor = (typeof getCountryColor === "function") ? getCountryColor(name) : null;
+      let cssColor = "#999";
+      if (typeof rawColor === "string") cssColor = rawColor;
+      else if (rawColor && rawColor.levels && Array.isArray(rawColor.levels)) {
+        const [r,g,b,a] = rawColor.levels;
+        const alpha = (typeof a === "number") ? (a/255) : 1;
+        cssColor = `rgba(${r},${g},${b},${alpha})`;
+      }
+      bar.style.background = cssColor;
+
+      bar.dataset.country = name;
+      bar.dataset.value = value;
+      bar.dataset.year = year;
+
+      // Hover + click
+bar.addEventListener("mouseenter", (ev) => {
+const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR"); 
+showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
+      });
+bar.addEventListener("mouseleave", hideHoverLabel);
+bar.addEventListener("click", (ev) => {
+const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR"); 
+showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
+setTimeout(() => hideHoverLabel(), 2000);
+      });
+
+      frag.appendChild(bar);
+      currentY += height;
+    });
+  });
+
+  origineBarsDiv.appendChild(frag);
+
+  let maxRows = 0;
+  Object.values(sortedByYear).forEach(arr => {
+    if (Array.isArray(arr)) maxRows = Math.max(maxRows, arr.length);
+  });
+  origineBarsDiv.style.height = `${y0 + maxRows * 50+10}px`;
 }
 
-function drawDestination(year = "2024") {
-  if (typeof destinationBarsDiv === "undefined" || destinationBarsDiv === null) {
-    console.error("drawDestination: destinationBarsDiv is NOT defined (no #destinationBars element).");
-    return;
-  }
 
-  // Get entries for the requested year
-  const entries = destination[selectedYear];
-  if (!entries || !Array.isArray(entries) || entries.length === 0) {
-    console.warn(`drawDestination: no entries for year "${year}".`, entries);
-    destinationBarsDiv.innerHTML = "";
-    return;
-  }
-
-
-  // Clear old bars
+function drawDestinationAllYears() {
+  if (!destinationBarsDiv) return;
   destinationBarsDiv.innerHTML = "";
 
   const containerWidth = destinationBarsDiv.clientWidth;
-  const colX = Math.round(containerWidth / 2); // center horizontally
-  let barHeight = 8;
-  let rowHeight = barHeight; // no gap between bars
-  const y0 = 0;
+  const containerHeight = 300; // adjust as needed
+  destinationBarsDiv.style.position = "relative";
+  destinationBarsDiv.style.height = containerHeight + "px";
+
+  const yearsToShow = years.slice(0, 8); // show 8 years
+  const slotWidth = containerWidth / yearsToShow.length;
+
+  yearsToShow.forEach((yr, yearIdx) => {
+    const entries = destination[yr];
+    if (!entries) return;
+
+    const slotX = yearIdx * slotWidth;
+
+    // --- Year label above bars ---
+    const yearLabel = document.createElement("div");
+    yearLabel.textContent = yr;
+    yearLabel.style.position = "absolute";
+    yearLabel.style.top = "0px";
+    yearLabel.style.left = `${slotX + slotWidth / 2}px`;
+    yearLabel.style.transform = "translateX(-50%)";
+    yearLabel.style.color = "white";
+    yearLabel.style.fontSize = "12px";
+    destinationBarsDiv.appendChild(yearLabel);
+
+    let y0 = 20; // space for label
+    let currentY = y0;
+
+    entries.forEach(([name, value]) => {
+if (value === 0) {
+        currentY += 10; // keep spacing for alignment
+        return;
+      }
+      // Get dynamic size for bar
+      const { width: rectW, height: barHeight } = getBarSize(value, slotWidth, 10);
+
+      // color
+      let cssColor = "#999";
+      const rawColor = getCountryColor ? getCountryColor(name) : null;
+      if (typeof rawColor === "string") cssColor = rawColor;
+
+      // create bar
+      const bar = document.createElement("div");
+      bar.className = "destination-bar";
+      bar.style.position = "absolute";
+      bar.style.left = `${slotX + slotWidth / 2 - rectW / 2}px`; // center within slot
+      bar.style.top = `${currentY}px`;
+      bar.style.width = `${rectW}px`;
+      bar.style.height = `${barHeight}px`;
+      bar.style.background = cssColor;
+
+      bar.dataset.country = name;
+      bar.dataset.value = value;
+
+      // hover events
+      bar.addEventListener("mouseenter", (ev) => {
+        const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR"); 
+        showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
+      });
+      bar.addEventListener("mouseleave", hideHoverLabel);
+      bar.addEventListener("click", (ev) => {
+        const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR"); 
+        showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
+        setTimeout(() => hideHoverLabel(), 2000);
+      });
+
+      destinationBarsDiv.appendChild(bar);
+      currentY += barHeight;
+    });
+  });
+}
 
 
-  // Create bars
-  for (let i = 0; i < entries.length; i++) {
-    const [name, value] = entries[i];
+function keyPressed() {
+  if (key === 'e') { // press E to export
+exportBarsToSVG("destinationContainer", "destinations.svg");
+exportBarsToSVG("origineContainer", "origins.svg");
 
-    let rectW = 0;
-    try {
-      rectW = Math.round(getSizeRect(value, containerWidth));
-    } catch (err) {
-      console.error("drawDestination: error calling getSizeRect()", err);
-      rectW = Math.max(2, Math.round(containerWidth * 0.05));
-    }
-
-    // Resolve color
-    let rawColor = (typeof getCountryColor === "function") ? getCountryColor(name) : null;
-    let cssColor = "#999";
-    if (typeof rawColor === "string") {
-      cssColor = rawColor;
-    } else if (rawColor && rawColor.levels && Array.isArray(rawColor.levels)) {
-      const [r, g, b, a] = rawColor.levels;
-      const alpha = (typeof a === "number") ? (a / 255) : 1;
-      cssColor = `rgba(${r},${g},${b},${alpha})`;
-    }
-
-    // Build bar element
-    const bar = document.createElement("div");
-    bar.className = "destination-bar";
-    bar.style.position = "absolute";
-    bar.style.left = `${colX - rectW / 2}px`;
-    bar.style.top = `${y0 + i * rowHeight}px`;
-    bar.style.width = `${rectW}px`;
-    bar.style.height = `${barHeight}px`;
-    bar.style.background = cssColor;
-
-    bar.dataset.country = name;
-    bar.dataset.value = value;
-
-bar.addEventListener("mouseenter", () => showHoverLabel(bar));
-bar.addEventListener("mouseleave", hideHoverLabel);
-
-bar.addEventListener("click", (ev) => {
- if (!this.dataset || !this.dataset.country) return;
-  const countryName = bar.dataset.country;
-  const val = bar.dataset.value;
-  showHoverLabel(`${countryName}\n${val}`, ev.pageX, ev.pageY, bar);
-  setTimeout(() => hideHoverLabel(), 2000);
-});
-
-
-    destinationBarsDiv.appendChild(bar);
   }
-
-  // Adjust height of container to fit bars
-  const totalHeight = y0 + entries.length * rowHeight;
-  destinationBarsDiv.style.height = `${totalHeight}px`;
 }
 
 function mousePressed() {
@@ -493,75 +545,26 @@ let rows = Math.ceil(total / cols);
 
       // click behavior
       btn.addEventListener("click", () => {
+       
         selectedCountry = name;
         setTitle(name, getCountryColor(name));
-        InitializeData();
-        drawOrigine();
+        InitializeData();        
         buildDestinations();
-        drawDestination();
-
+        computeGlobalScale();
+        drawDestinationAllYears();
+drawOrigineAll();
         // reset all buttons
         countryButtonsDiv.querySelectorAll(".country-btn").forEach(el => {
           el.style.color = "white";
         });
         btn.style.color = getCountryColor(name);
 
-        // --- Slider under country buttons ---
-        const globalDiv = document.getElementById("globalContainer");
-        const sliderWrapper = document.getElementById("sliderWrapper");
-        if (countryButtonsDiv.nextSibling) {
-  globalDiv.insertBefore(sliderWrapper, countryButtonsDiv.nextSibling);
-} else {
-  globalDiv.appendChild(sliderWrapper); // fallback if no sibling
-}
-sliderWrapper.innerHTML = ""; // clear previous slider
-sliderWrapper.style.display = "flex";
-sliderWrapper.style.flexDirection = "row";
-sliderWrapper.style.alignItems = "center";
-sliderWrapper.style.justifyContent = "center";
-sliderWrapper.style.gap = "10px";
-sliderWrapper.style.marginTop = "30px";
-
-// title left
-const sliderTitle = document.createElement("div");
-sliderTitle.textContent = "Evolution";
-sliderTitle.style.color = "white";
-sliderTitle.style.fontSize = "14px";
-sliderTitle.style.fontWeight = "bold";
-sliderWrapper.appendChild(sliderTitle);
-
-// slider middle
-const yearSlider = document.createElement("input");
-yearSlider.type = "range";
-yearSlider.className = "year-slider";  // use CSS for styling
-yearSlider.min = 0;
-yearSlider.max = years.length - 1;
-yearSlider.step = 1;
-yearSlider.value = 7;
-sliderWrapper.appendChild(yearSlider);
-
-// year display right
-const yearDisplay = document.createElement("div");
-yearDisplay.textContent = years[7];
-yearDisplay.style.color = "white";
-yearDisplay.style.fontSize = "12px";
-sliderWrapper.appendChild(yearDisplay);
-
-// slider input
-yearSlider.addEventListener("input", (e) => {
-  hideHoverLabel();
-  const idx = parseInt(e.target.value);
-  selectedYear = years[idx];
-  yearDisplay.textContent = selectedYear;
-  drawOrigine();
-  drawDestination();
-});
-
         // --- Destination and Origine titles ---
         if (!document.getElementById("destinationTitle")) {
           const destinationTitle = document.createElement("div");
           destinationTitle.id = "destinationTitle";
           destinationTitle.textContent = "Number of emigrants \nby destinations";
+          
           destinationTitle.style.whiteSpace = "pre-line";
           destinationTitle.style.textAlign = "center";
           destinationTitle.style.fontSize = "14px";
@@ -570,6 +573,7 @@ yearSlider.addEventListener("input", (e) => {
           destinationTitle.style.marginBottom = "30px";
           destinationTitle.style.color = "white";
           destinationContainer.prepend(destinationTitle);
+          
         }
 
         if (!document.getElementById("origineTitle")) {
@@ -591,8 +595,6 @@ yearSlider.addEventListener("input", (e) => {
     }
   }
 }
-
-
 
 
 function wrapLabel(label, maxLen) {
@@ -634,61 +636,104 @@ for (let col in countryColors) {
   return "#cccccc";
 }
 
-function getSizeRect(value, containerWidth) {
-  const maxValue = 11000000; // adjust to dataset
-  const scale = Math.sqrt(value) / Math.sqrt(maxValue);
-  return Math.max(1, scale * containerWidth);
+/*function getBarSize(value, colWidth, baseHeight = 10) {
+  if (value == null || isNaN(value)) 
+    return { width: colWidth * 0.05, height: baseHeight };
+
+  // Avoid division by zero
+  const range = globalMax - globalMin || 1;
+
+  // Linearly map min → 0.05 and max → 1
+  const normalized = 0.05 + ((value - globalMin) / range) * (1 - 0.05);
+
+  // Clamp to ensure within bounds (just in case)
+  const clamped = Math.max(0.05, Math.min(1, normalized));
+
+  return {
+    width: colWidth * clamped,
+    height: baseHeight
+  };
+}*/
+
+function getBarSize(value, colWidth, baseHeight = 10) {
+  if (value == null || isNaN(value)) 
+    return { width: colWidth * 0.02, height: baseHeight };
+
+  // Avoid division by zero
+  const range = globalMax - globalMin || 1;
+
+  // Normalize 0–1 range
+  let normalized = (value - globalMin) / range;
+  normalized = Math.max(0, Math.min(1, normalized)); // clamp 0–1
+
+  // Apply square-root curve and remap to 0.05–1
+  const curved = Math.sqrt(normalized);
+  const scaled = 0.02 + curved * (1 - 0.02);
+
+  return {
+    width: colWidth * scaled,
+    height: baseHeight
+  };
 }
 
-let hoverLabel;
 
-function showHoverLabel(bar) {
-  resetHighlight();
-  const name = bar.dataset.country;
-  const value = bar.dataset.value;
-const formattedValue = value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  
-  if (!hoverLabel) {
-    hoverLabel = document.createElement("div");
-    hoverLabel.style.position = "absolute";
-    hoverLabel.style.color = "white";
-    hoverLabel.style.fontSize = "13px";
-    hoverLabel.style.padding = "4px 6px";
-    hoverLabel.style.background = "rgba(0,0,0,0.7)";
-    hoverLabel.style.borderRadius = "4px";
-    hoverLabel.style.lineHeight = "1.2em";
-    hoverLabel.style.pointerEvents = "none";
-    hoverLabel.style.whiteSpace = "pre-line";
-    document.body.appendChild(hoverLabel);
+
+let hoverLabelDiv = null;
+
+// Show hover label for one bar
+function showHoverLabel(text, x, y, bar) {
+  if (!hoverLabelDiv) {
+    hoverLabelDiv = document.createElement("div");
+    hoverLabelDiv.className = "hover-label";
+    hoverLabelDiv.style.position = "absolute";
+    hoverLabelDiv.style.pointerEvents = "none";
+    hoverLabelDiv.style.background = "rgba(0,0,0,0.75)";
+    hoverLabelDiv.style.color = "white";
+    hoverLabelDiv.style.fontSize = "12px";
+    hoverLabelDiv.style.padding = "4px 8px";
+    hoverLabelDiv.style.borderRadius = "6px";
+    hoverLabelDiv.style.whiteSpace = "normal";
+    hoverLabelDiv.style.textAlign = "center"; // ⬅️ center text
+    hoverLabelDiv.style.lineHeight = "1.2";
+    hoverLabelDiv.style.zIndex = 9999;
+    document.body.appendChild(hoverLabelDiv);
   }
 
-  hoverLabel.textContent = `${name}\n${formattedValue}`;
-  hoverLabel.style.display = "block";
+const htmlText = text.replace(/\n/g, "<br>");
+  hoverLabelDiv.innerHTML = htmlText;
+  hoverLabelDiv.style.display = "block";
 
-  // Correct placement next to bar
-const rect = bar.getBoundingClientRect();
-const labelHeight = hoverLabel.offsetHeight || 20;
-hoverLabel.style.left = `${rect.right + 10 + window.scrollX}px`;
-hoverLabel.style.top = `${rect.top + rect.height / 2 - labelHeight / 2 + window.scrollY}px`;
+  // 🧭 Position based on the bar, not the mouse
+  const rect = bar.getBoundingClientRect();
 
-  highlightBars(name, bar);
+  // Center the label horizontally under the bar
+  const labelWidth = hoverLabelDiv.offsetWidth || 50;
+  const labelHeight = hoverLabelDiv.offsetHeight || 18;
+
+  const left = rect.left + (rect.width / 2) - (labelWidth / 2) + window.scrollX;
+  const top = rect.bottom + 6 + window.scrollY; // 6px gap under the bar
+
+  hoverLabelDiv.style.left = `${left}px`;
+  hoverLabelDiv.style.top = `${top}px`;
 }
 
+
+// Hide label
 function hideHoverLabel() {
-  if (hoverLabel) hoverLabel.style.display = "none";
-  resetHighlight();
+  if (hoverLabelDiv) {
+    hoverLabelDiv.style.display = "none";
+  }
 }
-
 
 function highlightBars(name, activeBar) {
   const allBars = document.querySelectorAll(".origine-bar, .destination-bar");
 
-  // dim everything
+  // Dim everything first
   allBars.forEach(bar => {
     bar.style.opacity = "0.25";
   });
 
-
+  // Highlight all bars for the selected country
   const matched = [];
   allBars.forEach(bar => {
     if (bar.dataset && bar.dataset.country === name) {
@@ -697,62 +742,73 @@ function highlightBars(name, activeBar) {
     }
   });
 
-  // ensure the activeBar is full opacity
-  if (activeBar) activeBar.style.opacity = "1";
-  
-  if ((!matched || matched.length === 0) && activeBar && activeBar._pairedLabel) {
-  activeBar._pairedLabel.style.display = "none";
+  // Ensure the explicitly active bar is full opacity
+  if (activeBar) {
+    activeBar.style.opacity = "1";
+  }
 }
 
-  matched.forEach(bar => {
-    if (bar === activeBar) return;
-    let lbl = bar._pairedLabel;
-    if (!lbl) {
-      lbl = document.createElement("div");
-      lbl.className = "paired-value-label";
-      lbl.style.position = "absolute";
-      lbl.style.pointerEvents = "none";
-      lbl.style.background = "rgba(0,0,0,0.75)";
-      lbl.style.color = "white";
-      lbl.style.fontSize = "12px";
-      lbl.style.padding = "4px 6px";
-      lbl.style.borderRadius = "4px";
-      lbl.style.whiteSpace = "nowrap";
-      lbl.style.zIndex = 9999;
-      document.body.appendChild(lbl);
-      bar._pairedLabel = lbl;
-    }
-
-    // set text and make visible
-    const v = bar.dataset.value ?? "";
-    lbl.textContent = String(v);
-
-    // position the paired label to the right of the bar, 
-    const rect = bar.getBoundingClientRect();
-
-    lbl.style.display = "block";
-    const labelHeight = lbl.offsetHeight || 18;
-    lbl.style.left = `${rect.right + 8 + window.scrollX}px`;
-    lbl.style.top  = `${rect.top + rect.height / 2 - labelHeight / 2 + window.scrollY}px`;
-  });
-
-  // hide other paired labels not part of current matched set
-  allBars.forEach(bar => {
-    if (bar._pairedLabel && !matched.includes(bar)) {
-      bar._pairedLabel.style.display = "none";
-    }
-  });
-}
-
-// resetHighlight: restore all bars and remove paired labels
+// Reset: restore all bars and remove hover tooltip (if any)
 function resetHighlight() {
   const allBars = document.querySelectorAll(".origine-bar, .destination-bar");
   allBars.forEach(bar => {
     bar.style.opacity = "1";
-
-    if (bar._pairedLabel) {
-      if (bar._pairedLabel.parentNode) bar._pairedLabel.parentNode.removeChild(bar._pairedLabel);
-      delete bar._pairedLabel;
-    }
   });
+
+  // Hide the global hover label if it exists
+  if (typeof hideHoverLabel === "function") {
+    hideHoverLabel();
+  }
+}
+
+function exportBarsToSVG(containerId, filename = "export.svg") {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    console.error("Container not found:", containerId);
+    return;
+  }
+
+  // Create SVG namespace
+  const xmlns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(xmlns, "svg");
+
+  // Match container size
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  svg.setAttribute("xmlns", xmlns);
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  // For each bar in the container
+  const bars = container.querySelectorAll(".origine-bar, .destination-bar");
+  bars.forEach(bar => {
+    const rect = document.createElementNS(xmlns, "rect");
+    const style = window.getComputedStyle(bar);
+
+    const x = parseFloat(bar.style.left);
+    const y = parseFloat(bar.style.top);
+    const w = parseFloat(bar.style.width);
+    const h = parseFloat(bar.style.height);
+    const fill = style.backgroundColor || "#999";
+
+    rect.setAttribute("x", x);
+    rect.setAttribute("y", y);
+    rect.setAttribute("width", w);
+    rect.setAttribute("height", h);
+    rect.setAttribute("fill", fill);
+    rect.setAttribute("data-country", bar.dataset.country || "");
+    rect.setAttribute("data-value", bar.dataset.value || "");
+
+    svg.appendChild(rect);
+  });
+
+  // Serialize and download
+  const svgBlob = new Blob([svg.outerHTML], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+  const link = document.createElement("a");
+  link.href = svgUrl;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(svgUrl);
 }
