@@ -56,7 +56,7 @@ html, body { margin: 0;
 #buttonLayer {
   width: 90%;
   max-width: 500px;
-  margin: 0 auto;
+  margin: 20px auto;
 }
 
 #countryButtons {
@@ -81,51 +81,6 @@ html, body { margin: 0;
   text-align: left;
 }
 
-#sliderWrapper #yearSliderContainer {
-  display: flex;  /* horizontal row */
-  flex-direction: row;/* play button + slider side by side */
-  align-items: center; /* vertical center */
-  gap: 10px; /* spacing between play and slider */
-  width: 90%;                /* responsive width */
-  max-width: 400px;          /* optional max width */
-  margin-bottom: 5px;        /* space to year display below */
-}
-
-#sliderWrapper #yearSliderContainer button {
-  cursor: pointer;
-  flex: 0 0 auto;            /* don't stretch */
-  padding: 5px 10px;
-  font-size: 14px;
-}
-
-#sliderWrapper #yearSliderContainer input[type="range"] {
-  flex: 1 1 auto;            /* take remaining space next to play button */
-}
-
-.year-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 200px;
-  height: 6px;
-  background: #444;
-  border-radius: 4px;
-  outline: none;
-  cursor: pointer;
-}
-.year-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 10px;
-  height: 10px;  
-  background: white;
-  cursor: pointer;
-}
-.year-slider::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  background: white;
-  cursor: pointer;
-}
 
 #globalContainer canvas {
   display: block;
@@ -146,7 +101,7 @@ html, body { margin: 0;
 #destinationBars {
   width: 100%;
   height: auto;/*container adapts to content */
-  background: #000; /* your background */
+
 }
 
 #sideBySide {
@@ -155,7 +110,7 @@ html, body { margin: 0;
   width: 100%;
 }
 
-/* Responsive reordering when screen < 768px */
+
 /* ---------- Mobile (<768px) ---------- */
 @media (max-width: 768px) {
   #mainLayout {
