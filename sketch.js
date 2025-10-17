@@ -13,7 +13,7 @@ let destinationBarsDiv;
 let creditDiv;
 let yearSliderContainer;
 let years = ["1990","2000","2010","2020","2024"];
-let selectedYear = years[4];
+let selectedYear = years[6];
 
 function preload() {
   MigWorld = loadJSON("MigWorld.json");
@@ -69,6 +69,13 @@ buttonCanvas.elt.addEventListener('touchstart', () => {}, {passive: false});
   setupButtons(); 
   precomputeVertices(); 
   drawButtons();
+  document.addEventListener("pointerdown", ev => {
+  // If click is outside any bar, reset
+  if (!ev.target.classList.contains("origine-bar") &&
+      !ev.target.classList.contains("destination-bar")) {
+    resetHighlight();
+  }
+});
 }
 
 
@@ -157,27 +164,51 @@ let orMin = Infinity;
 let orMax = -Infinity;
 
 function InitializeData() {
-  let dictPays = MigWorld.Pays[selectedCountry]; 
-  sortedByYear = {}; // reset
-let baselineYear = "2024"; let baselineData = dictPays[baselineYear]; let ranking = []; if (baselineData) { // Keep all countries, even if 0 
-  ranking = Object.entries(baselineData) .sort((a, b) => b[1] - a[1]) // sort descending by 2024 
-    .map(entry => entry[0]); } for (let year of years) { let yearData = dictPays[year]; if (!yearData) continue; // Map according to ranking, keep zeros 
-  let sorted = ranking.map(country => [country, yearData[country] || 0]); sortedByYear[year] = sorted; } // Optional: remove countries that are zero across all years 
-  const keepCountries = ranking.filter(country => years.some(year => (dictPays[year] && dictPays[year][country] > 0)) ); for (let year of years) { sortedByYear[year] = sortedByYear[year].filter(([country, _]) => keepCountries.includes(country)); }
+  const dictPays = MigWorld.Pays[selectedCountry];
+  if (!dictPays) return;
 
-  // --- Step 3: compute min/max for origins ---
+  sortedByYear = {}; // reset
+
+  // --- Step 1: collect all partner countries that have >0 in any year ---
+  const allCountries = new Set();
+  for (let year of years) {
+    const yearData = dictPays[year];
+    if (!yearData) continue;
+    for (let [country, value] of Object.entries(yearData)) {
+      if (value > 0) allCountries.add(country);
+    }
+  }
+
+  const keepCountries = Array.from(allCountries);
+
+  // --- Step 2: build per-year sorted lists (highest → lowest) ---
+  for (let year of years) {
+    const yearData = dictPays[year] || {};
+    const yearList = keepCountries.map(country => [
+      country,
+      yearData[country] || 0
+    ]);
+
+    // Sort descending for this specific year
+    yearList.sort((a, b) => b[1] - a[1]);
+
+    sortedByYear[year] = yearList;
+  }
+
+  // --- Step 3: compute min/max across all years ---
   orMin = Infinity;
   orMax = -Infinity;
 
   for (let year of years) {
-    let entries = sortedByYear[year];
+    const entries = sortedByYear[year];
     if (!entries) continue;
-    for (let [country, value] of entries) {
+    for (let [_, value] of entries) {
       if (value < orMin) orMin = value;
       if (value > orMax) orMax = value;
     }
   }
 }
+
 
 let destination = {};
 let destMin = Infinity;
@@ -188,50 +219,40 @@ let globalAvg = 0;
 function buildDestinations() {
   if (!selectedCountry) return;
   destination = {};
-  const baselineYear = "2024";
 
-  // --- Step 1: get baseline ranking from 2024 ---
-  const baselineData = [];
-  for (let originCountry in MigWorld.Pays) {
+  // --- Step 1: collect all origin countries that have >0 in any year ---
+  const allCountries = Object.keys(MigWorld.Pays);
+  const countriesToKeep = allCountries.filter(originCountry => {
     const dictPays = MigWorld.Pays[originCountry];
-    if (!dictPays) continue;
-    const yearData = dictPays[baselineYear];
-    if (!yearData) continue;
-    const dvalue = yearData[selectedCountry] || 0;
-    baselineData.push([originCountry, dvalue]);
-  }
-
-  // Sort descending by baseline year
-  baselineData.sort((a, b) => b[1] - a[1]);
-  const ranking = baselineData.map(e => e[0]);
-
-  // --- Step 2: keep only countries that have >0 in any year ---
-  const countriesToKeep = ranking.filter(country => {
+    if (!dictPays) return false;
     return years.some(year => {
-      const dictPays = MigWorld.Pays[country];
-      if (!dictPays) return false;
       const val = dictPays[year]?.[selectedCountry] || 0;
       return val > 0;
     });
   });
 
-  // --- Step 3: build destination per year keeping zeros for each country ---
+  // --- Step 2: build per-year destination lists, sorted by value (desc) ---
   for (let year of years) {
     let yearList = [];
-    for (let originCountry of ranking) {
-      if (!countriesToKeep.includes(originCountry)) continue;
+
+    for (let originCountry of countriesToKeep) {
       const dictPays = MigWorld.Pays[originCountry];
       if (!dictPays) continue;
       const yearData = dictPays[year] || {};
       const dvalue = yearData[selectedCountry] || 0;
-      yearList.push([originCountry, dvalue]); // keep zeros
+      yearList.push([originCountry, dvalue]);
     }
+
+    // Sort descending for this specific year
+    yearList.sort((a, b) => b[1] - a[1]);
+
     destination[year] = yearList;
   }
 
-  // --- Step 4: compute min/max for destinations ---
+  // --- Step 3: compute min/max across all years ---
   destMin = Infinity;
   destMax = -Infinity;
+
   for (let year of years) {
     const entries = destination[year];
     if (!entries) continue;
@@ -240,9 +261,8 @@ function buildDestinations() {
       if (value > destMax) destMax = value;
     }
   }
-
-  console.log("Destination min/max:", destMin, destMax);
 }
+
 
 
 function computeGlobalScale() {
@@ -332,16 +352,28 @@ const { width, height } = getBarSize(value, colWidth, baseHeight);
       bar.dataset.year = year;
 
       // Hover + click
-bar.addEventListener("mouseenter", (ev) => {
-const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR"); 
-showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
-      });
-bar.addEventListener("mouseleave", hideHoverLabel);
-bar.addEventListener("click", (ev) => {
-const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR"); 
-showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
-setTimeout(() => hideHoverLabel(), 2000);
-      });
+bar.addEventListener("pointerenter", ev => {
+  if (lockedCountry) return; // ignore hover if something is locked
+  const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR");
+  showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
+  highlightBars(bar.dataset.country, bar);
+});
+
+bar.addEventListener("pointerleave", ev => {
+  if (lockedCountry) return; // ignore if locked
+  hideHoverLabel();
+  resetHighlight();
+});
+
+bar.addEventListener("pointerdown", ev => {
+  ev.stopPropagation(); // prevent document click from firing immediately
+  const country = bar.dataset.country;
+  const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR");
+
+  lockedCountry = country;
+  showHoverLabel(`${country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
+  highlightBars(country, bar);
+});
 
       frag.appendChild(bar);
       currentY += height;
@@ -384,7 +416,7 @@ function drawDestinationAllYears() {
     yearLabel.style.left = `${slotX + slotWidth / 2}px`;
     yearLabel.style.transform = "translateX(-50%)";
     yearLabel.style.color = "white";
-    yearLabel.style.fontSize = "12px";
+    yearLabel.style.fontSize = "10px";
     destinationBarsDiv.appendChild(yearLabel);
 
     let y0 = 20; // space for label
@@ -417,17 +449,29 @@ if (value === 0) {
       bar.dataset.value = value;
 
       // hover events
-      bar.addEventListener("mouseenter", (ev) => {
-        const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR"); 
-        showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
-      });
-      bar.addEventListener("mouseleave", hideHoverLabel);
-      bar.addEventListener("click", (ev) => {
-        const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR"); 
-        showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
-        setTimeout(() => hideHoverLabel(), 2000);
-      });
+bar.addEventListener("pointerenter", ev => {
+  if (lockedCountry) return; // ignore hover if something is locked
+  const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR");
+  showHoverLabel(`${bar.dataset.country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
+  highlightBars(bar.dataset.country, bar);
+});
 
+bar.addEventListener("pointerleave", ev => {
+  if (lockedCountry) return; // ignore if locked
+  hideHoverLabel();
+  resetHighlight();
+});
+
+bar.addEventListener("pointerdown", ev => {
+  ev.stopPropagation(); // prevent document click from firing immediately
+  const country = bar.dataset.country;
+  const formattedVal = Number(bar.dataset.value).toLocaleString("fr-FR");
+
+  lockedCountry = country;
+  showHoverLabel(`${country}\n${formattedVal}`, ev.pageX, ev.pageY, bar);
+  highlightBars(country, bar);
+});
+           
       destinationBarsDiv.appendChild(bar);
       currentY += barHeight;
     });
@@ -569,7 +613,7 @@ drawOrigineAll();
           destinationTitle.style.textAlign = "center";
           destinationTitle.style.fontSize = "14px";
           destinationTitle.style.fontWeight = "normal";
-          destinationTitle.style.marginTop = "10px";
+          destinationTitle.style.marginTop = "20px";
           destinationTitle.style.marginBottom = "30px";
           destinationTitle.style.color = "white";
           destinationContainer.prepend(destinationTitle);
@@ -584,7 +628,7 @@ drawOrigineAll();
           origineTitle.style.textAlign = "center";
           origineTitle.style.fontSize = "14px";
           origineTitle.style.fontWeight = "normal";
-          origineTitle.style.marginTop = "10px";
+          origineTitle.style.marginTop = "20px";
           origineTitle.style.marginBottom = "30px";
           origineTitle.style.color = "white";
           origineContainer.prepend(origineTitle);
@@ -657,6 +701,8 @@ function getBarSize(value, colWidth, baseHeight = 10) {
   };
 }
 
+
+
 let hoverLabelDiv = null;
 
 // Show hover label for one bar
@@ -703,39 +749,21 @@ function hideHoverLabel() {
     hoverLabelDiv.style.display = "none";
   }
 }
+let lockedCountry = null; // currently highlighted country
 
 function highlightBars(name, activeBar) {
   const allBars = document.querySelectorAll(".origine-bar, .destination-bar");
-
-  // Dim everything first
+  allBars.forEach(bar => bar.style.opacity = "0.25");
   allBars.forEach(bar => {
-    bar.style.opacity = "0.25";
+    if (bar.dataset.country === name) bar.style.opacity = "1";
   });
-
-  // Highlight all bars for the selected country
-  const matched = [];
-  allBars.forEach(bar => {
-    if (bar.dataset && bar.dataset.country === name) {
-      bar.style.opacity = "1";
-      matched.push(bar);
-    }
-  });
-
-  // Ensure the explicitly active bar is full opacity
-  if (activeBar) {
-    activeBar.style.opacity = "1";
-  }
+  if (activeBar) activeBar.style.opacity = "1";
 }
 
-// Reset: restore all bars and remove hover tooltip (if any)
 function resetHighlight() {
-  const allBars = document.querySelectorAll(".origine-bar, .destination-bar");
-  allBars.forEach(bar => {
+  document.querySelectorAll(".origine-bar, .destination-bar").forEach(bar => {
     bar.style.opacity = "1";
   });
-
-  // Hide the global hover label if it exists
-  if (typeof hideHoverLabel === "function") {
-    hideHoverLabel();
-  }
+  lockedCountry = null;
+  hideHoverLabel();
 }
